@@ -1,44 +1,49 @@
 # dsh-cline-search
 
-**English** | [简体中文](./README.zh.md)
+**简体中文** | [English](./README.en.md)
 
-A **Cline Pass** web-search provider for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）提供 **Cline Pass** 网页搜索后端。
 
-It makes the native `web_search` tool work on a Cline Pass subscription key, using the subscription quota instead of Cline Credits.
+装好之后，dsh 原生的 `web_search` 工具就能用你的 Cline Pass 订阅 key 工作，**走订阅额度，而不是 Cline Credits（按量付费）**。
 
-## The problem
+## 要解决的问题
 
-dsh ships `@deepseek-ai/dsh-web-search-deepseek`, which speaks the **Anthropic Messages** protocol:
+dsh 自带 `@deepseek-ai/dsh-web-search-deepseek`，它说的是 **Anthropic Messages** 协议：
 
 ```
-POST {baseURL}/messages     + tool: web_search_20250305
+POST {baseURL}/messages     + 工具类型: web_search_20250305
 ```
 
-The Cline Pass gateway exposes only the **OpenAI-compatible** `POST {baseURL}/chat/completions`. Pointing the built-in provider at Cline Pass returns **404** — the route does not exist — so `web_search` cannot work at all.
+而 Cline Pass 网关只提供 **OpenAI 兼容**的 `POST {baseURL}/chat/completions`。把自带 provider 指向 Cline Pass 会直接返回 **404**（该路由不存在），所以 `web_search` 完全用不了。
 
-## What this plugin does
+> 注意：这不是"地址填错"，而是**两家协议不同**。自带 provider 的协议是写死在代码里的，改配置改不了。
 
-It registers a second provider on the dsh web seam that speaks the gateway's own protocol and maps the answer back onto the seam's portable result shape.
+## 本插件做了什么
+
+它在 dsh 的 web 接缝（seam）上注册**第二个 provider**，用网关自己的协议通信，并把结果映射回接缝的标准结构：
 
 ```
 ctx.web.registerSearchProvider({ id: 'cline-pass', available, search })
 ```
 
-## Gateway quirks this handles
+说白了就是加了一个**协议翻译层**。装好后你感觉不到它的存在，用起来和自带的一模一样。
 
-All three were established by probing the live endpoint, not from documentation.
+## 处理了三个网关特性
 
-### 1. Use a subscription model id
+以下三点都是**实测线上接口得出**（并非来自官方文档），踩过才知道：
 
-The model must come from the `cline-pass/*` namespace published by the gateway's recommended-models catalog. An upstream id such as `deepseek/deepseek-v4.1-flash` is billed against **Cline Credits** and fails on a subscription-only account with `insufficient_credits`.
+### 1. 必须用订阅模型 id
+
+模型必须取自网关推荐模型目录里的 `cline-pass/*` 命名空间。
+像 `deepseek/deepseek-v4.1-flash` 这样的上游 id 会按 **Cline Credits 计费**，订阅制账号会报 `insufficient_credits`（余额不足）。
 
 ```
 GET https://api.cline.bot/api/v1/ai/cline/recommended-models
 ```
 
-### 2. The search tool kind is provider-specific
+### 2. 搜索工具类型是供应商专属的
 
-The gateway forwards to **Vercel**, which rejects a bare `{"type":"web_search"}`:
+网关会转发给 **Vercel**，而 Vercel 不认裸的 `{"type":"web_search"}`：
 
 ```json
 {
@@ -49,11 +54,13 @@ The gateway forwards to **Vercel**, which rejects a bare `{"type":"web_search"}`
 }
 ```
 
-This plugin tries `vercel:exa_search` first, then `vercel:parallel_search`, then `web_search`.
+本插件依次尝试 `vercel:exa_search` → `vercel:parallel_search` → `web_search`。
 
-### 3. Sources come back as prose
+### 3. 来源是以正文形式返回的
 
-Unlike the Anthropic route, this one returns **no structured `url_citation` annotations**. The provider therefore asks the model to end its answer with a machine-parseable `SOURCES:` block and parses it, falling back to scanning every URL in the body so a malformed block never yields an empty result.
+与 Anthropic 路由不同，这条路由**不返回**结构化的 `url_citation` 注解。
+因此插件会让模型在回答结尾输出一个可机器解析的 `SOURCES:` 区块并解析它；
+同时兜底扫描正文里的所有 URL —— 这样即使模型没按格式输出，也不会变成"零来源"。
 
 ```
 SOURCES:
@@ -61,26 +68,29 @@ SOURCES:
 - https://www.deepseek.com/harness/en/ | DeepSeek Harness developer preview
 ```
 
-## Performance note
+## 性能说明
 
-Search is a **full model call that also performs retrieval**, so it takes roughly 8–25 seconds and consumes model tokens. It is not a cheap metadata lookup. Model choice matters: on the authors' account `cline-pass/deepseek-v4.1-flash` works well, while several other subscription ids currently fail upstream with HTTP 500.
+搜索是**一次完整的模型调用，同时包含检索过程**，因此约需 **8–25 秒**，并会消耗模型 token —— 它不是廉价的元数据查询。
 
-## Requirements
+模型选择很重要：在作者账号上 `cline-pass/deepseek-v4.1-flash` 工作良好，而其他若干订阅模型目前上游会返回 HTTP 500。
 
-- dsh (DeepSeek Harness)
-- A Cline Pass API key in the `CLINE_PASS_API_KEY` credential
+## 环境要求
 
-## Install
+- dsh（DeepSeek Harness）
+- `CLINE_PASS_API_KEY` 凭据中存放的 Cline Pass API key
 
-The plugin is **dependency-free** — it imports nothing from `@deepseek-ai/*` and reads everything through `ctx`. That is deliberate: a profile plugin's peer dependencies do not resolve from its own location, so a dependency-free plugin is the only shape that reliably loads.
+## 安装
 
-1. Copy the package into your profile's `node_modules`:
+本插件**零依赖** —— 不 import 任何 `@deepseek-ai/*`，一切都通过 `ctx` 获取。
+这是刻意的：profile 插件的 peer 依赖**无法从自身位置解析**，所以零依赖是唯一能可靠加载的形态。
+
+**1.** 把包拷进 profile 的 `node_modules`：
 
 ```sh
 cp -r dsh-cline-search "$DSH_HOME/profiles/web/node_modules/"
 ```
 
-2. Add it to the profile bundle list in `$DSH_HOME/profiles/web/package.json`:
+**2.** 在 `$DSH_HOME/profiles/web/package.json` 的 bundle 列表中加入它：
 
 ```json
 {
@@ -97,7 +107,7 @@ cp -r dsh-cline-search "$DSH_HOME/profiles/web/node_modules/"
 }
 ```
 
-3. Select it in `$DSH_HOME/profiles/web/cordis.patch.yml`:
+**3.** 在 `$DSH_HOME/profiles/web/cordis.patch.yml` 中选中它：
 
 ```yaml
 - id: web
@@ -106,11 +116,22 @@ cp -r dsh-cline-search "$DSH_HOME/profiles/web/node_modules/"
     fetchProvider: http
 ```
 
-4. Restart dsh. The bundle and selection are read once at launch.
+**4.** 重启 dsh。bundle 与选择只在启动时读取一次。
 
-## Configuration
+> 提示：`web_fetch` 与 `web_search` 是两个独立问题。
+> 如果你的系统把域名解析到保留地址（例如 Clash 的 fake-ip 模式返回 `198.18.x.x`），
+> `web_fetch` 会因为 SSRF 防护拒绝抓取而报错。
+> 解法是在 `$DSH_HOME/.env`（注意是 home 层，项目目录的 `.env` 会被拒绝）中设置代理：
 
-Override in the profile's `cordis.patch.yml`:
+```sh
+HTTPS_PROXY=http://127.0.0.1:7897
+HTTP_PROXY=http://127.0.0.1:7897
+NO_PROXY=api.cline.bot
+```
+
+## 配置
+
+在 profile 的 `cordis.patch.yml` 中覆盖：
 
 ```yaml
 - id: cline-search
@@ -123,25 +144,25 @@ Override in the profile's `cordis.patch.yml`:
     timeoutMs: 150000
 ```
 
-| Key | Default | Meaning |
+| 配置项 | 默认值 | 含义 |
 | --- | --- | --- |
-| `apiKeyEnv` | `CLINE_PASS_API_KEY` | Credential reference resolved per search |
-| `baseURL` | `https://api.cline.bot/api/v1` | Gateway base URL |
-| `models` | `[cline-pass/deepseek-v4.1-flash]` | Subscription model ids, tried in order |
-| `model` | — | Single-model shorthand; the rest of the defaults follow it |
-| `maxTokens` | `2500` | Answer budget; too small truncates the `SOURCES:` block |
-| `timeoutMs` | `150000` | Per-request timeout |
+| `apiKeyEnv` | `CLINE_PASS_API_KEY` | 凭据引用名，每次搜索时解析 |
+| `baseURL` | `https://api.cline.bot/api/v1` | 网关地址 |
+| `models` | `[cline-pass/deepseek-v4.1-flash]` | 订阅模型 id 列表，按顺序尝试 |
+| `model` | — | 单模型简写；其余默认值跟随其后 |
+| `maxTokens` | `2500` | 回答预算；太小会截断 `SOURCES:` 区块 |
+| `timeoutMs` | `150000` | 单次请求超时 |
 
-The API key is **never** stored in configuration. It is resolved through the dsh credential seam on every search, so rotating it needs no config change.
+API key **绝不**写入配置。它每次搜索都通过 dsh 凭据接缝实时解析，因此**轮换 key 无需改动任何配置**。
 
-## Uninstall
+## 卸载
 
-Remove the bundle from `package.json`, or just drop the `- id: web` override in `cordis.patch.yml` to fall back to the shipped provider.
+从 `package.json` 移除该 bundle；或仅删掉 `cordis.patch.yml` 里的 `- id: web` 覆盖段，即可回退到自带 provider。
 
-## Compatibility
+## 兼容性
 
-Built and verified against dsh on the `web` profile. It registers only on the web seam (`inject: ['web']`) and touches no other service.
+在 dsh 的 `web` profile 上构建并验证。它只注册到 web 接缝（`inject: ['web']`），不触碰其他服务。
 
-## License
+## 许可证
 
 MIT
