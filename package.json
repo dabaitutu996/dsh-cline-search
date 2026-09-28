@@ -1,0 +1,36 @@
+{
+  "name": "dsh-cline-search",
+  "version": "0.1.0",
+  "description": "Cline Pass web-search provider for dsh: registers a search backend on the web seam that speaks the gateway's OpenAI-compatible /chat/completions protocol.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-bundle",
+    "deepseek-harness",
+    "web-search",
+    "cline-pass",
+    "cline"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

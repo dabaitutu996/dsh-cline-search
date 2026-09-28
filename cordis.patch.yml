@@ -1,0 +1,30 @@
+# dsh bundle patch: registers the Cline Pass web-search provider.
+#
+# This row only ADDS a provider to the web seam; it does not change which one is
+# selected. Choose it by overriding the base `web` row in the profile's own
+# cordis.patch.yml (applied after every bundle layer):
+#
+#   - id: web
+#     config:
+#       searchProvider: cline-pass
+#       fetchProvider: http
+#
+# Overridable here or in that same profile layer:
+#   apiKeyEnv: CLINE_PASS_API_KEY   # credential reference
+#   baseURL:   https://api.cline.bot/api/v1
+#   models:    [cline-pass/deepseek-v4.1-flash]   # subscription ids only
+#   maxTokens: 2500
+#   timeoutMs: 150000
+#
+# IMPORTANT - the model must be a subscription id (`cline-pass/*`). An upstream
+# id such as `deepseek/deepseek-v4.1-flash` is billed against Cline Credits and
+# fails with `insufficient_credits` on a subscription-only account.
+#
+# The search tool kind is provider-specific: the gateway forwards to Vercel, which
+# rejects a bare `web_search` and accepts `vercel:exa_search` (used first) and
+# `vercel:parallel_search` among others. Sources arrive as prose rather than
+# structured annotations, so the model is asked to end with a `SOURCES:` block
+# that the provider parses.
+- insert:
+    - id: cline-search
+      name: dsh-cline-search
