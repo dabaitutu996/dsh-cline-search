@@ -1,5 +1,7 @@
 # dsh-cline-search
 
+**English** | [简体中文](./README.zh.md)
+
 A **Cline Pass** web-search provider for the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`).
 
 It makes the native `web_search` tool work on a Cline Pass subscription key, using the subscription quota instead of Cline Credits.
