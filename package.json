@@ -24,6 +24,14 @@
     "cline-pass",
     "cline"
   ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dabaitutu996/dsh-cline-search.git"
+  },
+  "homepage": "https://github.com/dabaitutu996/dsh-cline-search#readme",
+  "bugs": {
+    "url": "https://github.com/dabaitutu996/dsh-cline-search/issues"
+  },
   "license": "MIT",
   "engines": {
     "node": ">=20.3.0"
